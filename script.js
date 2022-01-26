@@ -12,6 +12,7 @@ const inputCadence = document.querySelector(".form__input--cadence");
 const inputElevation = document.querySelector(".form__input--elevation");
 
 // DATA
+// Основной класс тренировок
 class Workout {
   constructor(location, distance, time) {
     this.location = location;
@@ -25,6 +26,7 @@ class Workout {
   }
 }
 
+// Пробежка
 class Running extends Workout {
   constructor(location, distance, time, cad) {
     super(location, distance, time);
@@ -38,6 +40,7 @@ class Running extends Workout {
   }
 }
 
+// Езда на велосепеде
 class Cycling extends Workout {
   constructor(location, distance, time, elev) {
     super(location, distance, time);
@@ -58,12 +61,17 @@ class App {
     this.workOuts = [];
     this.isCycling = false;
 
+    // Получаем данные из Локала, после инициализируем карту и получаем текущую геопозицию пользователя
+    this.getLocalStorageData();
     this.loadMap().getPos();
+
+    // Привязываем все методы к слушетелям, так же привязываем контекст
     inputType.addEventListener("change", this.toggleElevationField.bind(this));
     form.addEventListener("submit", this.newWorkOut.bind(this));
     containerWorkouts.addEventListener("click", this.moveToMaker.bind(this));
   }
 
+  // Получаем гео от пользователя, если нет, выдаем ошибку и ставим рандомные значения координат
   getPos() {
     navigator.geolocation &&
       navigator.geolocation.getCurrentPosition(
@@ -80,19 +88,21 @@ class App {
     return this;
   }
 
+  // Инициализируем карту и загружаем тайлсет из гугл карт
   loadMap() {
     this.map = L.map("map");
     L.tileLayer("http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
       maxZoom: 20,
       subdomains: ["mt0", "mt1", "mt2", "mt3"],
     }).addTo(this.map);
-
+    // При клике на карту в стейт записывается событие клика, а так же показывается форма для заполнения
     this.map.on("click", (mapE) => {
       this.mapEvent = mapE;
       this.showForm();
       inputDuration.value = inputDistance.value = "";
     });
 
+    // Рендерим все упражнения и маркеры к ним
     this.renderWorkOuts();
     this.workOuts.forEach(this.renderPopMaker.bind(this)); // RENDER ALL MARKERS
 
@@ -105,6 +115,7 @@ class App {
     inputDistance.focus();
   }
 
+  // Добавляем display none для моментального скрытия с поле зрения и очищаем все инпуты
   hideForm() {
     form.style.display = "none";
     form.classList.add("hidden");
@@ -115,6 +126,7 @@ class App {
         "";
   }
 
+  // При переключении происходит смена класса и очищаются соответсвующие инпуты
   toggleElevationField() {
     inputElevation.parentElement.classList.toggle("form__row--hidden");
     inputCadence.parentElement.classList.toggle("form__row--hidden");
@@ -125,17 +137,21 @@ class App {
     return this;
   }
 
+  // Создаем новое упражение, рендерим и добавляем маркер
   newWorkOut(e) {
     e.preventDefault();
 
     const validNum = (...inputs) => {
+      // Проверка всех входящих данных на число
       return inputs.every((el) => Number.isFinite(el));
     };
 
     const isAllPositve = (...inputs) => {
+      // Проверка всех входящих данных на Положительное число
       return inputs.every((el) => el >= 0);
     };
 
+    // Значение всех инпутов приводим к числу
     const dist = +inputDistance.value;
     const time = +inputDuration.value;
     const calc = inputElevation.value
@@ -152,6 +168,7 @@ class App {
       return;
     }
 
+    // Собираем параметры из инпутов и события клика по карте и создаем новый инстанс класса на их основе
     const coords = [this.mapEvent?.latlng.lat, this.mapEvent?.latlng.lng];
     const params = [coords, dist, time];
     let currentWorkOut;
@@ -163,6 +180,7 @@ class App {
       currentWorkOut = new Running(...params, calc);
     }
 
+    // Добавляем новый класс в общий массив, рендерим все упражнения снова и записываем в локальное хранилище, так же убираем форму
     this.workOuts.push(currentWorkOut);
     this.renderWorkOuts();
     this.renderPopMaker(currentWorkOut);
@@ -181,6 +199,7 @@ class App {
       const isRunning = type === "Running";
 
       containerWorkouts.insertAdjacentHTML(
+        // Формируем верстку
         "afterbegin",
         `
       <li class="workout workout--${type.toLocaleLowerCase()}" data-id="${
@@ -222,9 +241,10 @@ class App {
   }
 
   renderPopMaker(work) {
-    const type = work.constructor.name;
+    const type = work.constructor.name; // Получаем тип благодаря имени в конструкторе
     // this.coords = [this.mapEvent.latlng.lat, this.mapEvent.latlng.lng];
 
+    // Создаем попап с необходимыми параметрами и классом
     const workPopup = L.popup({
       className: `${type}-popup`,
       minWidth: 250,
@@ -233,27 +253,51 @@ class App {
       closeOnClick: false,
     });
 
+    // Пишем контент в попап на основе текущего упражения
     workPopup.setContent(
       `${type.toLowerCase() === "running" ? "🏃‍♂️" : "🚴‍♀️"} ${type} on ${
         months[work.months]
       } ${work.day}`
     );
-    L.marker(work.location).addTo(this.map).bindPopup(workPopup).openPopup();
+    L.marker(work.location).addTo(this.map).bindPopup(workPopup).openPopup(); // Добавляем маркер на карту
   }
-
+  // Функция перемещиния при клики на маркер
   moveToMaker(e) {
-    const work = e.target.closest(".workout");
+    const work = e.target.closest(".workout"); // Определяем упражение и избегаем ненужных срабатываний
     if (work) {
+      // Если мы кликнем по элементу, который или у которого родитель workout, то мы продолжим обработку
       const workout = this.workOuts.find(
         (workout) => workout.id == work.dataset.id
       );
-      this.map.flyTo(workout.location, 14);
+      this.map.flyTo(workout.location, 14); // Метод для плавной прокрутке к нужным координатам
     }
   }
 
+  // Записываем все упраженения в локальное хранилище
   setLocalStorage() {
     localStorage.setItem("workouts", JSON.stringify(this.workOuts));
   }
+
+  // Получаем данные из локального хранилища и приписываем прототип
+  getLocalStorageData() {
+    //   if(localStorage.)
+    const data = JSON.parse(localStorage.getItem("workouts")); // Парсим из JSON в обьект
+    console.log(data);
+
+    if (data) {
+      // Добавляем необходимый прототип
+      data.forEach((el) => {
+        el.__proto__ = el.cad ? Running.prototype : Cycling.prototype;
+      });
+      this.workOuts = data;
+    }
+  }
+
+  // Обнуляем локальное хранилище
+  static reset() {
+    localStorage.removeItem("workouts", JSON.stringify(this.workOuts));
+  }
 }
 
+// Инициальзируем приложение
 const app = new App();
